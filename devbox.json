@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
+  "packages": [
+    "clang@21.1.8",
+    "lldb@21.1.8",
+    "clang-tools@21.1.8",
+    "llvm_21@21.1.8",
+    "cmake@4.1.2",
+    "gnumake@4.4.1",
+    "conan@2.28.1",
+    "ccache@4.13.6",
+    "gcovr@8.4",
+    "python314Packages.pytest@9.1.1",
+    "python314Packages.pytest-bdd@7.1.2",
+    "shellcheck@0.11.0",
+    "docker@29.6.2",
+    "gh@2.102.0",
+    "actionlint@1.7.12",
+    "python@3.14.4",
+    "plantuml@1.2026.3"
+  ],
+  "shell": {
+    "init_hook": [],
+    "scripts": {}
+  }
+}

@@ -1,0 +1,48 @@
+---
+# Enforces the naming conventions and "const/constexpr everywhere possible". HeaderFilterRegex covers this project's own src/ headers (not
+# vendor or system headers) — much of a typical layer is header-only, so without it these checks
+# would silently skip most of the codebase.
+#
+# Deliberately NOT enforced here (not mechanically checkable, or not specified by the guideline):
+#   - Verb-for-side-effects / noun-for-pure-function naming (semantic, not syntactic)
+#   - is_/has_ prefix on predicates (clang-tidy cannot special-case by return type)
+#   - Enum constant case (not specified)
+#   - Uniform/direct-list-init (`x{y}` over `x(y)` or `x = y`) — no mechanical check exists for
+#     this; enforced by review only
+Checks: >
+  clang-diagnostic-*,
+  clang-analyzer-*,
+  readability-identifier-naming,
+  misc-const-correctness
+WarningsAsErrors: 'readability-identifier-naming,misc-const-correctness'
+HeaderFilterRegex: '.*/src/.*'
+CheckOptions:
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: m_
+  - key: readability-identifier-naming.ClassCase
+    value: Camel_Snake_Case
+  - key: readability-identifier-naming.StructCase
+    value: Camel_Snake_Case
+  - key: readability-identifier-naming.EnumCase
+    value: Camel_Snake_Case
+  - key: readability-identifier-naming.TypeAliasCase
+    value: Camel_Snake_Case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+...

@@ -1,0 +1,460 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
+jobs:
+
+  lint-markdown:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    container:
+      image: davidanson/markdownlint-cli2:v0.23.3
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint Markdown
+        run: markdownlint-cli2
+
+  commit-lint:
+    name: Commit lint
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/shell-tools:1.2.1
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - name: Validate commit message
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          MSG=$(echo "$COMMIT_MESSAGE" | head -1)
+          echo "$MSG" | grep -qE "^Merge " && exit 0
+          echo "$MSG" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?: .{1,100}$" \
+            || { echo "ERROR: Commit message does not follow Conventional Commits spec"; exit 1; }
+      - name: Validate PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "$PR_TITLE" | \
+          grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?: .{1,100}$" \
+            || { echo "ERROR: PR title does not follow Conventional Commits spec"; exit 1; }
+
+  scan-source:
+    name: Scan source
+    runs-on: ubuntu-latest
+    container:
+      image: aquasec/trivy:0.74.0
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for secrets and vulnerabilities
+        run: trivy fs --exit-code 1 --severity HIGH,CRITICAL --scanners secret,vuln .
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0
+    env:
+      CONAN_HOME: /tmp/conan
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan
+          key: conan-glibc-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-glibc-cpp-tool-
+      - name: Lint
+        run: make lint-code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-results
+          path: test_reports/linting/
+
+  lint-shell:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/shell-tools:1.2.1
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint shell scripts
+        run: make lint-shell
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-shell-results
+          path: test_reports/linting/
+
+  lint-dbc:
+    name: Lint DBC files
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cantools:1.0.1
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint DBC files
+        run: make lint-dbc
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0
+    env:
+      CONAN_HOME: /tmp/conan
+    needs: [commit-lint, scan-source]
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan
+          key: conan-glibc-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-glibc-cpp-tool-
+      - name: Test
+        run: make test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test_reports/
+
+  bdd-test:
+    name: BDD test
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0
+    env:
+      CONAN_HOME: /tmp/conan
+    needs: [commit-lint, scan-source]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan
+          key: conan-glibc-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-glibc-cpp-tool-
+      - name: BDD test
+        run: make bdd-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bdd-test-results
+          path: test_reports/
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0
+    env:
+      CONAN_HOME: /tmp/conan
+    needs: [commit-lint, scan-source]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan
+          key: conan-glibc-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-glibc-cpp-tool-
+      - name: Coverage
+        run: make coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-results
+          path: test_reports/coverage/
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0
+    env:
+      CONAN_HOME: /tmp/conan
+    needs: [commit-lint, scan-source]
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan
+          key: conan-glibc-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-glibc-cpp-tool-
+      - name: Debug build
+        run: make build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-tool-debug
+          path: build/debug/src/cpp-tool
+
+  release-build:
+    name: Release build
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/cpp-build-musl:1.5.2
+    env:
+      CONAN_HOME: /tmp/conan-musl
+    needs: [commit-lint, scan-source]
+    if: "!cancelled() && !failure() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/conan-musl
+          key: conan-musl-cpp-tool-${{ hashFiles('conanfile.py') }}
+          restore-keys: conan-musl-cpp-tool-
+      - name: Install the image's Conan configuration
+        run: conan config install /opt/conan-config
+      - name: Release build
+        run: make release-build
+      - name: Release-build tests
+        run: make release-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-test-results
+          path: test_reports/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-tool
+          path: build/release/src/cpp-tool
+
+  build-debug-image:
+    name: Build Debug image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Debug image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: image/Dockerfile
+          target: debug
+          push: false
+          outputs: type=docker,dest=image-debug.tar
+          tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}-debug
+          build-args: |
+            VERSION=${{ github.sha }}
+            COMMIT=${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-debug
+          path: image-debug.tar
+          retention-days: 7
+
+  scan-debug-image:
+    name: Scan Debug image
+    runs-on: ubuntu-latest
+    container:
+      image: aquasec/trivy:0.74.0
+    needs: build-debug-image
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-debug
+      - name: Scan image (report)
+        run: trivy image --input image-debug.tar --severity HIGH,CRITICAL --exit-code 0
+      - name: Scan image (gate)
+        run: trivy image --input image-debug.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+
+  push-debug-image:
+    name: Push Debug image
+    runs-on: ubuntu-latest
+    needs: [build-debug-image, scan-debug-image]
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-debug
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Load and push
+        run: |
+          docker load --input image-debug.tar
+          docker push "ghcr.io/${{ github.repository }}:sha-${{ github.sha }}-debug"
+
+  build-release-image:
+    name: Build image
+    runs-on: ubuntu-latest
+    needs: release-build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Release image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: image/Dockerfile
+          target: release
+          push: false
+          outputs: type=docker,dest=image-release.tar
+          tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+          build-args: |
+            VERSION=${{ github.sha }}
+            COMMIT=${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-release
+          path: image-release.tar
+          retention-days: 7
+
+  scan-release-image:
+    name: Scan image
+    runs-on: ubuntu-latest
+    container:
+      image: aquasec/trivy:0.74.0
+    needs: build-release-image
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-release
+      - name: Scan image (report)
+        run: trivy image --input image-release.tar --severity HIGH,CRITICAL --exit-code 0
+      - name: Scan image (gate)
+        run: trivy image --input image-release.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+
+  push-release-image:
+    name: Push image
+    runs-on: ubuntu-latest
+    needs: [build-release-image, scan-release-image]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-release
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Load and push
+        run: |
+          docker load --input image-release.tar
+          docker tag "ghcr.io/${{ github.repository }}:sha-${{ github.sha }}" "ghcr.io/${{ github.repository }}:latest"
+          docker push "ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
+          docker push "ghcr.io/${{ github.repository }}:latest"
+
+  promote-release-image:
+    name: Promote image
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Retag without rebuilding
+        run: |
+          docker buildx imagetools create \
+            --tag "ghcr.io/${{ github.repository }}:${{ github.ref_name }}" \
+            --tag "ghcr.io/${{ github.repository }}:stable" \
+            "ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
+
+  scan-promoted-image:
+    name: Scan promoted image
+    runs-on: ubuntu-latest
+    container:
+      image: aquasec/trivy:0.74.0
+    needs: promote-release-image
+    if: "!cancelled() && !failure() && (startsWith(github.ref, 'refs/tags/v'))"
+    permissions:
+      packages: read
+    env:
+      TRIVY_USERNAME: ${{ github.actor }}
+      TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Scan image (report)
+        run: trivy image --image-src remote --severity HIGH,CRITICAL --exit-code 0 "ghcr.io/${{ github.repository }}:${{ github.ref_name }}"
+      - name: Scan image (gate)
+        run: trivy image --image-src remote --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "ghcr.io/${{ github.repository }}:${{ github.ref_name }}"
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/shell-tools:1.2.1
+    needs: [release-build, promote-release-image, scan-promoted-image]
+    if: "!cancelled() && !failure() && (startsWith(github.ref, 'refs/tags/v'))"
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpp-tool
+          path: dist/
+      - name: Generate the release notes
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git cliff --tag "${{ github.ref_name }}" --latest -o RELEASE_NOTES.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: dist/cpp-tool
+
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/hzahnlei/build-images/mkdocs:1.5.3
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch')
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build docs
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            sed -i "/^site_name: /s/\"$/ (${{ github.ref_name }})\"/" mkdocs.yml
+          else
+            sed -i "/^site_name: /s/\"$/ (docs built $(date -u +%Y-%m-%d))\"/" mkdocs.yml
+          fi
+          make docs-build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+      - uses: actions/deploy-pages@v4
+

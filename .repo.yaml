@@ -1,0 +1,18 @@
+name: C++ CLI Tool
+description: C++ CLI Tool example.
+repository: gitlab.com/hzahnlei/cpp-tool
+repoType: single
+ci: github
+assistants: []
+artifacts:
+  - name: cpp-tool
+    title: C++ CLI Tool
+    description: C++ CLI Tool example.
+    language: cpp
+    type: tool
+    modules: [scaffold, ci, specs, bdd, ai, can]
+meta:
+  # Written by `repo update`; do not edit.
+  generatorVersion: v2.0.0-39-ga92abda
+  artifacts:
+    cpp-tool: [scaffold, ci, specs, bdd, ai, can]
