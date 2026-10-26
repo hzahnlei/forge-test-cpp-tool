@@ -20,7 +20,7 @@ ad9b1133ff53  docs/design/system_context.md
 41518e6b4ab4  docs/requirements/capabilities/CAP-001_greeting.md
 375f78fcd260  docs/requirements/glossary.md
 d1fdc4677532  docs/verification/acceptance/CAP-001_greeting.feature
-01a5e6920d98  image/Dockerfile
+54cea8b7c3b6  image/Dockerfile
 65e7618bc7b8  image/entrypoint.sh
 22e416a6fad7  pytest.ini
 72578c61e2b9  scripts/arch_check.py
