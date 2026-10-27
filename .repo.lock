@@ -15,7 +15,7 @@ fd9c171b5c29  avatar/avatar.afdesign
 f79b524f3e15  cliff.toml
 3e6f78d9f054  conanfile.py
 3025b35514ec  devbox.json
-ad9b1133ff53  docs/design/system_context.md
+6d1f1e90cc7d  docs/design/system_context.md
 3f38497379a1  docs/index.md
 41518e6b4ab4  docs/requirements/capabilities/CAP-001_greeting.md
 375f78fcd260  docs/requirements/glossary.md

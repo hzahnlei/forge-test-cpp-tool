@@ -265,7 +265,7 @@ IMAGE_BUILD_RUN := docker run --rm --platform $(IMAGE_PLATFORM) -v "$(CURDIR):/s
 # Debug container image (bash and investigation tools, see the containerization guideline).
 # Image name is suffixed with -debug to distinguish from the release image.
 image: phony
-	$(IMAGE_BUILD_RUN) -e CONAN_HOME=/src/.conan registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0 \
+	$(IMAGE_BUILD_RUN) -e CONAN_HOME=/src/.conan registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.4.0 \
 	    make build BUILD_DEBUG_DIR=$(IMAGE_BUILD_DIR)/debug VERSION=$(VERSION) COMMIT=$(COMMIT)
 	docker build \
 	    --platform $(IMAGE_PLATFORM) \
@@ -277,7 +277,7 @@ image: phony
 # Release container image (distroless, nonroot — minimal attack surface).
 # Tagged with both the version and latest.
 release-image: phony
-	$(IMAGE_BUILD_RUN) -e CONAN_HOME=/src/.conan registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.3.0 \
+	$(IMAGE_BUILD_RUN) -e CONAN_HOME=/src/.conan registry.gitlab.com/hzahnlei/build-images/cpp-build-glibc:1.4.0 \
 	    make release-build BUILD_RELEASE_DIR=$(IMAGE_BUILD_DIR)/release VERSION=$(VERSION) COMMIT=$(COMMIT)
 	docker build \
 	    --platform $(IMAGE_PLATFORM) \
@@ -328,7 +328,7 @@ MKDOCS := docker run --rm -v "$(CURDIR):/docs" $(MKDOCS_IMAGE)
 endif
 
 docs-build: phony
-	$(MKDOCS) build --site-dir $(SITE_DIR)
+	$(MKDOCS) build --strict --site-dir $(SITE_DIR)
 
 # Delete all generated build artifacts and test reports.
 clean: phony
